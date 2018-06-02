@@ -2,10 +2,12 @@ package com.gnicolaou.user.moviereview;
 
 
 import android.content.Context;
+import android.database.Cursor;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.Bundle;
 import android.support.v4.app.Fragment;
+import android.support.v4.widget.SwipeRefreshLayout;
 import android.support.v7.widget.DefaultItemAnimator;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
@@ -19,9 +21,14 @@ import android.widget.ProgressBar;
 import android.widget.Toast;
 
 import com.gnicolaou.user.moviereview.adapters.MainAdapter;
+import com.gnicolaou.user.moviereview.databases.FavoriteMoviesDB;
 import com.gnicolaou.user.moviereview.model.MovieReviewResponse;
+import com.gnicolaou.user.moviereview.model.SqlData;
 import com.gnicolaou.user.moviereview.services.MovieReviewCalls;
 import com.gnicolaou.user.moviereview.services.ServiceGenerator;
+
+import java.util.ArrayList;
+import java.util.List;
 
 import retrofit2.Call;
 import retrofit2.Callback;
@@ -31,13 +38,15 @@ import retrofit2.Response;
 public class SearchFragment extends Fragment {
 
     View view;
+    FavoriteMoviesDB favoriteMoviesDB;
+    MainAdapter mainAdapter;
 
     private RecyclerView mRecyclerView;
     private MovieReviewResponse mMovieReviewResponse;
     private EditText searchInput;
     private Button searchBtn;
     private ProgressBar progressBar;
-
+    private SwipeRefreshLayout swipeRefreshLayout;
 
     public SearchFragment() {
         // Required empty public constructor
@@ -50,6 +59,8 @@ public class SearchFragment extends Fragment {
         // Inflate the layout for this fragment
         view = inflater.inflate(R.layout.fragment_search, container, false);
 
+        favoriteMoviesDB = new FavoriteMoviesDB(getActivity());
+
         progressBar = view.findViewById(R.id.progress_bar);
         searchBtn = view.findViewById(R.id.search_btn);
         searchInput = view.findViewById(R.id.search_input);
@@ -60,11 +71,11 @@ public class SearchFragment extends Fragment {
                 if (hasInternetConnection()) {
                     if (searchInput.getText().toString().trim().length() > 0) {
                         executeApi(searchInput.getText().toString());
-                        getActivity().getWindow().setFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
-                                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE);
+//                        getActivity().getWindow().setFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
+//                                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE);
                         progressBar.setVisibility(View.VISIBLE);
                     } else
-                        Toast.makeText(getActivity(), "Enter a movie title", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(getActivity(), "Enter a valid movie title", Toast.LENGTH_SHORT).show();
                 }
                 else Toast.makeText(getActivity(), "No Internet Connection!", Toast.LENGTH_SHORT).show();
             }
@@ -72,14 +83,22 @@ public class SearchFragment extends Fragment {
 
         mRecyclerView = view.findViewById(R.id.recyclerview);
 
+        swipeRefreshLayout=view.findViewById(R.id.swiperefresh);
+        swipeRefreshLayout.setOnRefreshListener(new SwipeRefreshLayout.OnRefreshListener() {
+            @Override
+            public void onRefresh() {
+                swipeRefreshLayout.setRefreshing(false);
+            }
+        });
+
         return view;
     }
 
-
+    // query = user input / movie title
     private void executeApi(String query) {
         MovieReviewCalls movieReviewCalls = ServiceGenerator.createService(MovieReviewCalls.class);
         Call<MovieReviewResponse> call = movieReviewCalls.getMovieReview(
-                "a7a879f6a9474c83b9fa964e3f60fdcd", query); // query = user input / movie title
+                "a7a879f6a9474c83b9fa964e3f60fdcd", query);
         call.enqueue(new Callback<MovieReviewResponse>() {
             @Override
             public void onResponse(Call<MovieReviewResponse> call, Response<MovieReviewResponse> response) {
@@ -90,29 +109,34 @@ public class SearchFragment extends Fragment {
                 }else{
                     mMovieReviewResponse = response.body();
                     initRecyclerView();
-                    Toast.makeText(getActivity(), "Search Successful", Toast.LENGTH_SHORT).show();
                 }
 
-                getActivity().getWindow().clearFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE);
+//                getActivity().getWindow().clearFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE);
                 progressBar.setVisibility(View.GONE);
+//                searchInput.setText("");
             }
 
             @Override
             public void onFailure(Call<MovieReviewResponse> call, Throwable t) {
                 if (getActivity()==null)
                     return;
-                getActivity().getWindow().clearFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE);
+//                getActivity().getWindow().clearFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE);
                 progressBar.setVisibility(View.GONE);
+//                searchInput.setText("");
                 Toast.makeText(getActivity(), "Search failed!", Toast.LENGTH_SHORT).show();
             }
         });
     }
 
     private void initRecyclerView() {
-        MainAdapter mainAdapter = new MainAdapter(mMovieReviewResponse.getResults());
+        mainAdapter = new MainAdapter(mMovieReviewResponse.getResults());
         mRecyclerView.setLayoutManager(new LinearLayoutManager(getActivity()));
         mRecyclerView.setItemAnimator(new DefaultItemAnimator());
         mRecyclerView.setAdapter(mainAdapter);
+
+        if (mainAdapter.getItemCount()==0)
+            Toast.makeText(getActivity(), "No movies found!",Toast.LENGTH_SHORT).show();
+        else Toast.makeText(getActivity(), "Search Successful", Toast.LENGTH_SHORT).show();
     }
 
 

@@ -1,6 +1,8 @@
 package com.gnicolaou.user.moviereview.adapters;
 
+import android.app.AlertDialog;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.support.annotation.NonNull;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.widget.RecyclerView;
@@ -12,8 +14,11 @@ import android.widget.TextView;
 import android.widget.Toast;
 import android.widget.ToggleButton;
 
+import com.gnicolaou.user.moviereview.MainActivity;
 import com.gnicolaou.user.moviereview.R;
+import com.gnicolaou.user.moviereview.databases.FavoriteMoviesDB;
 import com.gnicolaou.user.moviereview.model.Result;
+import com.gnicolaou.user.moviereview.model.SqlData;
 import com.gnicolaou.user.moviereview.util.ItemClickListener;
 
 import java.util.List;
@@ -26,53 +31,60 @@ public class MainAdapter extends RecyclerView.Adapter<MainAdapter.ViewHolder> {
 
     List<Result> mResults;
     Context mContext;
+    View v;
+    FavoriteMoviesDB favoriteMoviesDB;
+    boolean showAgain = true;
 
     public MainAdapter(List<Result> mResults) {
         this.mResults = mResults;
     }
 
+
     @NonNull
     @Override
     public MainAdapter.ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-        View v = LayoutInflater.from(parent.getContext()).inflate(R.layout.main_adapter_item_view, parent, false);
+        v = LayoutInflater.from(parent.getContext()).inflate(R.layout.main_adapter_item_view, parent, false);
         return new MainAdapter.ViewHolder(v);
     }
 
     @Override
     public void onBindViewHolder(@NonNull final MainAdapter.ViewHolder holder, int position) {
         mContext = holder.itemView.getContext();
-        String x = String.valueOf(position);
+
+        favoriteMoviesDB = new FavoriteMoviesDB(mContext);
+
+        String x = String.valueOf(position+1);
         holder.movieNumber.setText(x);
         holder.movieTitle.setText(mResults.get(position).getDisplayTitle());
-        holder.movieReview.setText(mResults.get(position).getSummaryShort()
-                .replaceAll("&quot;", "\""));
+        if (mResults.get(position).getSummaryShort() != null) {
+            holder.movieReview.setText(mResults.get(position).getSummaryShort()
+                    .replaceAll("&quot;", "\""));
+        }
+        if(favoriteMoviesDB.isItemIn(mResults.get(position).getDisplayTitle())){
+            holder.favouriteBtn.setBackgroundDrawable(ContextCompat.getDrawable(mContext, R.drawable.favorite_icon_y));
+        }else{
+            holder.favouriteBtn.setBackgroundDrawable(ContextCompat.getDrawable(mContext, R.drawable.favorite_icon_w));
+        }
+
         holder.setClickListener(new ItemClickListener() {
             @Override
             public void onClick(View view, final int position, boolean isLongClick) {
                 if (view.getId()== R.id.textview2) {
-                    Toast.makeText(mContext, mResults.get(position).getMpaaRating(),Toast.LENGTH_SHORT).show();
+                    Toast.makeText(mContext, mResults.get(position).getPublicationDate(),Toast.LENGTH_SHORT).show();
                 }
 
                 if (view.getId()== R.id.fav_btn){
-                    holder.favouriteBtn.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
-                        @Override
-                        public void onCheckedChanged(CompoundButton compoundButton, boolean isChecked) {
-                            if (isChecked) {
-                                //saveMovie(position, mResults.get(position).getDisplayTitle());
-                                holder.favouriteBtn.setBackgroundDrawable(ContextCompat.getDrawable(mContext, R.drawable.favorite_icon_y));
-                            } else {
-                                //deleteMovie(mResults.get(position).getDisplayTitle());
-                                holder.favouriteBtn.setBackgroundDrawable(ContextCompat.getDrawable(mContext, R.drawable.favorite_icon_w));
-                            }
-                        }
-                    });
+                    if (holder.favouriteBtn.isChecked()) {
+                        saveMovie(mResults.get(position).getDisplayTitle());
+                        holder.favouriteBtn.setBackgroundDrawable(ContextCompat.getDrawable(mContext, R.drawable.favorite_icon_y));
+                        if (showAgain)
+                            showDialog();
+                    } else {
+                        holder.favouriteBtn.setBackgroundDrawable(ContextCompat.getDrawable(mContext, R.drawable.favorite_icon_w));
+                    }
                 }
             }
         });
-        // mResults not ready yet or 0 results
-        if (getItemCount()==0){
-            Toast.makeText(mContext, "No movies found with this title!",Toast.LENGTH_SHORT).show();
-        }
     }
 
     @Override
@@ -80,6 +92,31 @@ public class MainAdapter extends RecyclerView.Adapter<MainAdapter.ViewHolder> {
         if (mResults!=null)
             return mResults.size();
         else return 0;
+    }
+
+    private void saveMovie(String title) {
+        boolean insertData = favoriteMoviesDB.addData(title);
+
+        if (insertData) {
+            Toast.makeText(mContext, "Movie Bookmarked", Toast.LENGTH_SHORT).show();
+        } else {
+            Toast.makeText(mContext, "Oops, something went wrong!", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void showDialog(){
+        new AlertDialog.Builder(mContext)
+                .setTitle("Note")
+                .setMessage("Refresh the 'Favorites' tab with every new bookmark." +
+                        "\n\n"+"You can delete a movie you liked from 'Favorites' only")
+                .setPositiveButton("Got it", null)
+                .setNegativeButton("Never show again", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialogInterface, int i) {
+                        showAgain = false;
+                    }
+                })
+                .show();
     }
 
 
